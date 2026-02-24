@@ -47,7 +47,8 @@ GitHub Push / Manual / Schedule
 
 | Layer   | Location           | Purpose                                      |
 |---------|--------------------|----------------------------------------------|
-| **Data**| `data/*.nac.yaml`  | Device config (hostname, interfaces, VLANs)  |
+| **Data**| `data/*.nac.yaml`  | Device config (hostname, IPs, interfaces, VLANs, SSIDs) |
+| **Credentials** | Jenkins `device-credentials` | Device login (never in repo)        |
 | **Schema** | `.schema.yaml`  | Allowed keys, types, constraints             |
 | **Rules** | `.rules/*.py`   | Business logic (e.g., unique VLAN IDs)       |
 | **Code** | `terraform/`, `Jenkinsfile` | Deployment logic                    |
@@ -64,9 +65,10 @@ Jenkins: http://localhost:8080
 
 ### 2. Configure Jenkins
 
-- Add CML credentials: **Manage Jenkins** > **Credentials** > Add **Username with password**
-  - ID: `cml-credentials`
-  - Username / Password: your CML credentials
+Add two credentials (**Manage Jenkins** > **Credentials** > Add **Username with password**):
+
+- **CML API**: ID `cml-credentials` – username/password for CML server
+- **Device login**: ID `device-credentials` – username/password for router/switch/WLC (e.g. admin/admin for lab)
 
 ### 3. Create Pipeline Job
 
@@ -93,8 +95,10 @@ nac-validate -s .schema.yaml -r .rules data/
 ## Local Terraform
 
 ```bash
-export TF_VAR_cml_username="your-user"
-export TF_VAR_cml_password="your-password"
+export TF_VAR_cml_username="your-cml-user"
+export TF_VAR_cml_password="your-cml-password"
+export TF_VAR_device_username="admin"
+export TF_VAR_device_password="admin"
 cd terraform
 terraform init
 terraform plan

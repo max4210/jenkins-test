@@ -8,7 +8,18 @@ device:
   hostname: str(min=1, max=63)
   interfaces: list(include('interface'), required=False)
   vlans: list(include('vlan'), required=False)
+  vlan_interfaces: list(include('vlan_interface'), required=False)
+  management: include('management', required=False)
   wireless: include('wireless', required=False)
+---
+vlan_interface:
+  vlan: int(min=1, max=4094)
+  ip: str()
+  mask: str()
+---
+management:
+  ip: str()
+  mask: str()
 ---
 interface:
   name: str(min=1, max=64)

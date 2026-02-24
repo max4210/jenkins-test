@@ -6,6 +6,13 @@ switch:
       name: DATA
     - id: 20
       name: VOICE
+  vlan_interfaces:
+    - vlan: 10
+      ip: 10.0.1.2
+      mask: 255.255.255.0
+    - vlan: 20
+      ip: 10.0.2.2
+      mask: 255.255.255.0
   interfaces:
     - name: GigabitEthernet0/0
       mode: access

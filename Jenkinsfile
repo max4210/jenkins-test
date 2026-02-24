@@ -14,14 +14,17 @@ pipeline {
     }
 
     environment {
-        CML_CREDENTIALS = credentials('cml-credentials')
-        CML_URL         = "${params.CML_URL}"
-        CML_USERNAME    = "${CML_CREDENTIALS_USR}"
-        CML_PASSWORD    = "${CML_CREDENTIALS_PSW}"
-        TF_VAR_cml_url  = "${params.CML_URL}"
+        CML_CREDENTIALS     = credentials('cml-credentials')
+        DEVICE_CREDENTIALS  = credentials('device-credentials')
+        CML_URL             = "${params.CML_URL}"
+        CML_USERNAME        = "${CML_CREDENTIALS_USR}"
+        CML_PASSWORD        = "${CML_CREDENTIALS_PSW}"
+        TF_VAR_cml_url      = "${params.CML_URL}"
         TF_VAR_cml_username = "${CML_CREDENTIALS_USR}"
         TF_VAR_cml_password = "${CML_CREDENTIALS_PSW}"
         TF_VAR_lab_title    = "${params.LAB_TITLE}"
+        TF_VAR_device_username = "${DEVICE_CREDENTIALS_USR}"
+        TF_VAR_device_password = "${DEVICE_CREDENTIALS_PSW}"
         TF_IN_AUTOMATION    = 'true'
     }
 

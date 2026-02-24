@@ -33,3 +33,15 @@ variable "wlc_node_definition" {
   type        = string
   default     = "iosv"
 }
+
+variable "device_username" {
+  description = "Username for device login (router, switch, WLC)"
+  type        = string
+  sensitive   = true
+}
+
+variable "device_password" {
+  description = "Password for device login and enable"
+  type        = string
+  sensitive   = true
+}
