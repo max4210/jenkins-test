@@ -82,7 +82,7 @@ pipeline {
             steps {
                 sh """
                     python3 scripts/generate_testbed.py \
-                        --lab-id ${env.LAB_ID} \
+                        --tf-dir terraform \
                         --output tests/testbed.yaml
                 """
                 sh 'cat tests/testbed.yaml'

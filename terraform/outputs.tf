@@ -8,17 +8,34 @@ output "lab_title" {
   value       = cml2_lab.network_lab.title
 }
 
-output "router1_id" {
-  description = "Router1 node ID"
-  value       = cml2_node.router1.id
+output "nodes" {
+  description = "All node details from the lifecycle resource"
+  value       = cml2_lifecycle.network_lab.nodes
 }
 
-output "router2_id" {
-  description = "Router2 node ID"
-  value       = cml2_node.router2.id
-}
-
-output "switch1_id" {
-  description = "Switch1 node ID"
-  value       = cml2_node.switch1.id
+output "devices" {
+  description = "Device connection info for pyATS testbed generation"
+  value = {
+    router1 = {
+      id             = cml2_node.router1.id
+      label          = cml2_node.router1.label
+      nodedefinition = cml2_node.router1.nodedefinition
+      state          = cml2_node.router1.state
+      interfaces     = try(cml2_lifecycle.network_lab.nodes[cml2_node.router1.id].interfaces, [])
+    }
+    router2 = {
+      id             = cml2_node.router2.id
+      label          = cml2_node.router2.label
+      nodedefinition = cml2_node.router2.nodedefinition
+      state          = cml2_node.router2.state
+      interfaces     = try(cml2_lifecycle.network_lab.nodes[cml2_node.router2.id].interfaces, [])
+    }
+    switch1 = {
+      id             = cml2_node.switch1.id
+      label          = cml2_node.switch1.label
+      nodedefinition = cml2_node.switch1.nodedefinition
+      state          = cml2_node.switch1.state
+      interfaces     = try(cml2_lifecycle.network_lab.nodes[cml2_node.switch1.id].interfaces, [])
+    }
+  }
 }
