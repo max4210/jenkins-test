@@ -11,8 +11,6 @@ pipeline {
                description: 'CML server URL')
         string(name: 'LAB_TITLE', defaultValue: 'Jenkins-Terraform-Lab',
                description: 'Name for the CML lab')
-        string(name: 'CONVERGENCE_TIMEOUT', defaultValue: '600',
-               description: 'Max seconds to wait for lab nodes to boot')
     }
 
     environment {
@@ -77,16 +75,6 @@ pipeline {
                     }
                 }
                 echo "CML Lab ID: ${env.LAB_ID}"
-            }
-        }
-
-        stage('Wait for Convergence') {
-            steps {
-                sh """
-                    python3 scripts/wait_for_lab.py \
-                        --lab-id ${env.LAB_ID} \
-                        --timeout ${params.CONVERGENCE_TIMEOUT}
-                """
             }
         }
 
