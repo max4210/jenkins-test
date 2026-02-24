@@ -1,0 +1,11 @@
+wlc_9800:
+  type: wlc_9800
+  hostname: WLC1
+  wireless:
+    ssids:
+      - name: Corporate
+        vlan: 10
+        security: wpa2-psk
+      - name: Guest
+        vlan: 20
+        security: open

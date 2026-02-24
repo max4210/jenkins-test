@@ -1,0 +1,15 @@
+switch:
+  type: switch
+  hostname: SW1
+  vlans:
+    - id: 10
+      name: DATA
+    - id: 20
+      name: VOICE
+  interfaces:
+    - name: GigabitEthernet0/0
+      mode: access
+      vlan: 10
+    - name: GigabitEthernet0/1
+      mode: access
+      vlan: 20

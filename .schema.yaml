@@ -1,0 +1,30 @@
+---
+router: include('device', required=False)
+switch: include('device', required=False)
+wlc_9800: include('device', required=False)
+---
+device:
+  type: str()
+  hostname: str(min=1, max=63)
+  interfaces: list(include('interface'), required=False)
+  vlans: list(include('vlan'), required=False)
+  wireless: include('wireless', required=False)
+---
+interface:
+  name: str(min=1, max=64)
+  ip: str(required=False)
+  mask: str(required=False)
+  mode: str(required=False)
+  vlan: int(required=False)
+---
+vlan:
+  id: int(min=1, max=4094)
+  name: str(min=1, max=128, required=False)
+---
+wireless:
+  ssids: list(include('ssid'), required=False)
+---
+ssid:
+  name: str(min=1, max=32)
+  vlan: int(required=False)
+  security: str(required=False)
