@@ -5,6 +5,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.jenkins
+      # For faster builds, run: $env:DOCKER_BUILDKIT=1; docker-compose build
     container_name: jenkins-cml
     ports:
       - "8080:8080"

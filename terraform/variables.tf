@@ -27,3 +27,9 @@ variable "lab_title" {
   type        = string
   default     = "Jenkins-Terraform-Lab"
 }
+
+variable "wlc_node_definition" {
+  description = "CML node definition for WLC (C9800-CL if licensed, else iosv)"
+  type        = string
+  default     = "iosv"
+}

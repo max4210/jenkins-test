@@ -9,7 +9,6 @@ RUN apt-get update && \
         python3-venv \
         unzip \
         curl \
-        gnupg \
         sshpass \
     && rm -rf /var/lib/apt/lists/*
 
@@ -20,14 +19,14 @@ RUN curl -fsSL "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/te
     rm /tmp/terraform.zip && \
     chmod +x /usr/local/bin/terraform
 
-RUN python3 -m venv /opt/pyats-venv && \
-    /opt/pyats-venv/bin/pip install --no-cache-dir --upgrade pip && \
-    /opt/pyats-venv/bin/pip install --no-cache-dir \
-        "pyats[full]" \
-        requests \
+RUN python3 -m venv /opt/nac-venv && \
+    /opt/nac-venv/bin/pip install --no-cache-dir --upgrade pip && \
+    /opt/nac-venv/bin/pip install --no-cache-dir \
+        nac-validate \
         pyyaml \
+        requests \
         jinja2
 
-ENV PATH="/opt/pyats-venv/bin:${PATH}"
+ENV PATH="/opt/nac-venv/bin:${PATH}"
 
 USER jenkins
