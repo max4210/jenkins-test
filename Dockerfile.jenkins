@@ -1,0 +1,33 @@
+FROM jenkins/jenkins:lts
+
+USER root
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        python3 \
+        python3-pip \
+        python3-venv \
+        unzip \
+        curl \
+        gnupg \
+        sshpass \
+    && rm -rf /var/lib/apt/lists/*
+
+ARG TERRAFORM_VERSION=1.7.5
+RUN curl -fsSL "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip" \
+        -o /tmp/terraform.zip && \
+    unzip /tmp/terraform.zip -d /usr/local/bin/ && \
+    rm /tmp/terraform.zip && \
+    chmod +x /usr/local/bin/terraform
+
+RUN python3 -m venv /opt/pyats-venv && \
+    /opt/pyats-venv/bin/pip install --no-cache-dir --upgrade pip && \
+    /opt/pyats-venv/bin/pip install --no-cache-dir \
+        "pyats[full]" \
+        requests \
+        pyyaml \
+        jinja2
+
+ENV PATH="/opt/pyats-venv/bin:${PATH}"
+
+USER jenkins

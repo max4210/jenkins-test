@@ -1,0 +1,21 @@
+version: "3.8"
+
+services:
+  jenkins:
+    build:
+      context: .
+      dockerfile: Dockerfile.jenkins
+    container_name: jenkins-cml
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - ./:/workspace:ro
+    environment:
+      - JAVA_OPTS=-Djenkins.install.runSetupWizard=true
+    restart: unless-stopped
+
+volumes:
+  jenkins_home:
+    driver: local

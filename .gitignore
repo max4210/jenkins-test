@@ -1,0 +1,14 @@
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
+terraform/tfplan
+terraform/*.tfplan
+
+tests/testbed.yaml
+pyats_logs/
+__pycache__/
+*.pyc
+
+.env
+*.log
