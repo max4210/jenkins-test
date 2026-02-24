@@ -116,3 +116,7 @@ terraform apply
 - **pollSCM**: Every 5 minutes
 - **cron**: Nightly at ~2 AM
 - **Manual**: Build with Parameters
+
+## Troubleshooting
+
+**"Lab not found" (404)** – The lab was deleted outside Terraform (e.g. CML restart, manual delete). Run **Build with Parameters**, set **RESET_STATE** to `true`, then build. This clears stale state so Terraform creates a fresh lab.

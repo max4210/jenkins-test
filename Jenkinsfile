@@ -11,6 +11,8 @@ pipeline {
                description: 'CML server URL')
         string(name: 'LAB_TITLE', defaultValue: 'Jenkins-Terraform-Lab',
                description: 'Name for the CML lab')
+        booleanParam(name: 'RESET_STATE', defaultValue: false,
+               description: 'Clear Terraform state (use when lab was deleted outside Terraform, e.g. 404 Lab not found)')
     }
 
     environment {
@@ -54,6 +56,20 @@ pipeline {
                 dir('terraform') {
                     sh 'terraform init -input=false'
                 }
+            }
+        }
+
+        stage('Reset State') {
+            when {
+                expression { return params.RESET_STATE }
+            }
+            steps {
+                dir('terraform') {
+                    sh '''
+                        terraform state rm cml2_lifecycle.network_lab cml2_link.router_to_switch cml2_link.wlc_to_switch cml2_node.router cml2_node.switch cml2_node.wlc cml2_lab.network_lab 2>/dev/null || true
+                    '''
+                }
+                echo 'Terraform state cleared - next plan will create resources from scratch.'
             }
         }
 
