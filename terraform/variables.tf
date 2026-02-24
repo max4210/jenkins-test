@@ -29,9 +29,9 @@ variable "lab_title" {
 }
 
 variable "wlc_node_definition" {
-  description = "CML node definition for WLC (C9800-CL if licensed, else iosv)"
+  description = "CML node definition for WLC (cat9800 if licensed, else iosv)"
   type        = string
-  default     = "iosv"
+  default     = "cat9800"
 }
 
 variable "device_username" {

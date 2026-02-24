@@ -11,6 +11,8 @@ pipeline {
                description: 'CML server URL')
         string(name: 'LAB_TITLE', defaultValue: 'Jenkins-Terraform-Lab',
                description: 'Name for the CML lab')
+        string(name: 'WLC_NODE_DEFINITION', defaultValue: 'cat9800',
+               description: 'CML node for WLC: cat9800 or iosv (fallback)')
         booleanParam(name: 'RESET_STATE', defaultValue: false,
                description: 'Clear Terraform state (use when lab was deleted outside Terraform, e.g. 404 Lab not found)')
     }
@@ -25,6 +27,7 @@ pipeline {
         TF_VAR_cml_username = "${CML_CREDENTIALS_USR}"
         TF_VAR_cml_password = "${CML_CREDENTIALS_PSW}"
         TF_VAR_lab_title    = "${params.LAB_TITLE}"
+        TF_VAR_wlc_node_definition = "${params.WLC_NODE_DEFINITION}"
         TF_VAR_device_username = "${DEVICE_CREDENTIALS_USR}"
         TF_VAR_device_password = "${DEVICE_CREDENTIALS_PSW}"
         TF_IN_AUTOMATION    = 'true'
