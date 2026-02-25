@@ -23,12 +23,15 @@ Reads .env file automatically if present in the project root.
 """
 
 import argparse
+import difflib
+import glob
 import json
 import os
 import re
 import sys
 import time
 from collections import OrderedDict
+from datetime import datetime, timezone
 from pathlib import Path
 
 import urllib3
@@ -159,11 +162,31 @@ class CMLClient:
         return resp.json()
 
     def get_node_config(self, lab_id, node_id):
-        resp = self.session.get(
-            f"{self.base}/api/v0/labs/{lab_id}/nodes/{node_id}/config"
-        )
-        resp.raise_for_status()
-        return resp.text
+        """Try multiple API paths to retrieve a node's configuration."""
+        config_paths = [
+            f"/api/v0/labs/{lab_id}/nodes/{node_id}/config",
+            f"/api/v2/labs/{lab_id}/nodes/{node_id}/config",
+        ]
+        last_exc = None
+        for path in config_paths:
+            try:
+                resp = self.session.get(f"{self.base}{path}")
+                resp.raise_for_status()
+                text = resp.text
+                if text and text.strip():
+                    return text
+            except requests.HTTPError as exc:
+                last_exc = exc
+
+        node_info = self.get_node(lab_id, node_id)
+        if isinstance(node_info, dict):
+            cfg = node_info.get("configuration")
+            if cfg and isinstance(cfg, str) and cfg.strip():
+                return cfg
+
+        if last_exc:
+            raise last_exc
+        raise requests.HTTPError(f"No config found for node {node_id}")
 
     # --- Lab lifecycle --------------------------------------------------
 
@@ -180,10 +203,12 @@ class CMLClient:
         resp.raise_for_status()
 
     def extract_node_config(self, lab_id, node_id):
+        """Extract running config from a booted node. Returns True if successful."""
         resp = self.session.put(
             f"{self.base}/api/v0/labs/{lab_id}/nodes/{node_id}/extract_configuration"
         )
         resp.raise_for_status()
+        return True
 
     def wait_for_lab_ready(self, lab_id, timeout=300, poll_interval=10):
         """Poll until all configurable nodes reach BOOTED state."""
@@ -669,33 +694,99 @@ def _dict_representer(dumper, data):
 _OrderedDumper.add_representer(OrderedDict, _dict_representer)
 
 
-def write_nac_yaml(device_dict, filepath):
-    """Wrap a device dict in iosxe.devices[] and write to file."""
+def _yaml_to_string(doc):
+    """Serialize an OrderedDict document to a YAML string."""
+    return yaml.dump(
+        doc,
+        Dumper=_OrderedDumper,
+        default_flow_style=False,
+        sort_keys=False,
+        allow_unicode=True,
+    )
+
+
+def _find_latest_previous(output_dir, role, suffix, current_ts):
+    """Find the most recent timestamped file for a role, excluding current_ts."""
+    pattern = os.path.join(output_dir, f"{role}.*.{suffix}")
+    candidates = sorted(glob.glob(pattern), reverse=True)
+    for path in candidates:
+        if current_ts not in os.path.basename(path):
+            return path
+    return None
+
+
+def _write_delta(old_path, new_path, delta_path, label):
+    """Compare two text files and write a unified diff as the delta."""
+    old_lines = []
+    if old_path and os.path.isfile(old_path):
+        with open(old_path, encoding="utf-8") as fh:
+            old_lines = fh.readlines()
+
+    with open(new_path, encoding="utf-8") as fh:
+        new_lines = fh.readlines()
+
+    old_name = os.path.basename(old_path) if old_path else "(none)"
+    new_name = os.path.basename(new_path)
+
+    diff = list(difflib.unified_diff(
+        old_lines, new_lines,
+        fromfile=old_name, tofile=new_name,
+        lineterm="",
+    ))
+
+    if not diff:
+        print(f"    delta: no changes for {label}")
+        return False
+
+    added = sum(1 for l in diff if l.startswith("+") and not l.startswith("+++"))
+    removed = sum(1 for l in diff if l.startswith("-") and not l.startswith("---"))
+
+    with open(delta_path, "w", encoding="utf-8") as fh:
+        fh.write(f"! Delta for {label}\n")
+        fh.write(f"! Compared: {old_name} -> {new_name}\n")
+        fh.write(f"! Lines added: {added}, removed: {removed}\n")
+        fh.write("!\n")
+        for line in diff:
+            fh.write(line.rstrip("\n") + "\n")
+
+    print(f"    delta: +{added} -{removed} -> {delta_path}")
+    return True
+
+
+def write_nac_yaml(device_dict, output_dir, role, timestamp):
+    """Wrap a device dict in iosxe.devices[] and write timestamped files + deltas."""
     wireless_cli = device_dict.pop("_wireless_cli", None)
 
     doc = OrderedDict()
     doc["iosxe"] = OrderedDict()
     doc["iosxe"]["devices"] = [device_dict]
 
-    with open(filepath, "w", encoding="utf-8") as fh:
-        yaml.dump(
-            doc,
-            fh,
-            Dumper=_OrderedDumper,
-            default_flow_style=False,
-            sort_keys=False,
-            allow_unicode=True,
-        )
+    yaml_filename = f"{role}.{timestamp}.nac.yaml"
+    yaml_path = os.path.join(output_dir, yaml_filename)
+
+    with open(yaml_path, "w", encoding="utf-8") as fh:
+        fh.write(_yaml_to_string(doc))
+
+    print(f"    -> {yaml_path}")
+
+    prev_yaml = _find_latest_previous(output_dir, role, "nac.yaml", timestamp)
+    delta_yaml_path = os.path.join(output_dir, f"{role}.{timestamp}.delta.yaml")
+    _write_delta(prev_yaml, yaml_path, delta_yaml_path, f"{role} YAML")
 
     if wireless_cli:
-        raw_path = filepath.replace(".nac.yaml", ".wireless.cli")
-        with open(raw_path, "w", encoding="utf-8") as fh:
+        cli_filename = f"{role}.{timestamp}.wireless.cli"
+        cli_path = os.path.join(output_dir, cli_filename)
+        with open(cli_path, "w", encoding="utf-8") as fh:
             fh.write(f"! Wireless CLI from {device_dict.get('name', '?')}\n")
-            fh.write(f"! Export this manually — not part of the NaC IOS-XE data model\n")
+            fh.write("! Not part of the NaC IOS-XE data model\n")
             fh.write("!\n")
             fh.write(wireless_cli)
             fh.write("\n")
-        print(f"  Wireless CLI -> {raw_path}")
+        print(f"    wireless CLI -> {cli_path}")
+
+        prev_cli = _find_latest_previous(output_dir, role, "wireless.cli", timestamp)
+        delta_cli_path = os.path.join(output_dir, f"{role}.{timestamp}.delta.wireless.cli")
+        _write_delta(prev_cli, cli_path, delta_cli_path, f"{role} wireless CLI")
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -824,6 +915,9 @@ def _export_nodes(client, lab_id, args):
     nodes = client.get_nodes(lab_id)
     print(f"Nodes in lab: {len(nodes)}")
 
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    print(f"Export timestamp: {ts}")
+
     if not args.dry_run:
         os.makedirs(args.output, exist_ok=True)
 
@@ -845,8 +939,9 @@ def _export_nodes(client, lab_id, args):
         print(f"  [{label}] ({node_def}, state: {state}) — extracting config...")
         try:
             client.extract_node_config(lab_id, nid)
-        except requests.HTTPError:
-            pass
+            time.sleep(2)
+        except requests.HTTPError as exc:
+            print(f"    extract returned {exc} (non-fatal, trying download anyway)")
 
         print(f"  [{label}] downloading config...")
         try:
@@ -862,9 +957,8 @@ def _export_nodes(client, lab_id, args):
         role, parse_fn = PARSER_MAP[node_def]
         device = parse_fn(config_text, label)
 
-        filename = f"{role}.nac.yaml"
         if args.dry_run:
-            print(f"\n--- {filename} ---")
+            print(f"\n--- {role}.{ts}.nac.yaml ---")
             doc = OrderedDict()
             doc["iosxe"] = OrderedDict()
             doc["iosxe"]["devices"] = [device]
@@ -872,16 +966,15 @@ def _export_nodes(client, lab_id, args):
                        default_flow_style=False, sort_keys=False)
             wireless = device.pop("_wireless_cli", None)
             if wireless:
-                print(f"\n--- {role}.wireless.cli ---")
+                print(f"\n--- {role}.{ts}.wireless.cli ---")
                 print(wireless)
         else:
-            filepath = os.path.join(args.output, filename)
-            write_nac_yaml(device, filepath)
-            print(f"    -> {filepath}")
+            write_nac_yaml(device, args.output, role, ts)
             exported += 1
 
     if not args.dry_run:
         print(f"\nExported {exported} device(s) to {args.output}/")
+        print(f"Files use timestamp: {ts}")
     print("Done.")
 
 

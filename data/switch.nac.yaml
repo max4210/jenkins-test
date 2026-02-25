@@ -40,7 +40,7 @@ switch:
       mode: trunk
       allowed_vlans: "20,100,200"
     - name: GigabitEthernet0/2
-      description: Management via bridge0
+      description: Management via bridge1
       mode: access
       vlan: 1
   ospf:

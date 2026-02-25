@@ -1,0 +1,47 @@
+! Delta for router YAML
+! Compared: (none) -> router.20260225T113604Z.nac.yaml
+! Lines added: 40, removed: 0
+!
+--- (none)
++++ router.20260225T113604Z.nac.yaml
+@@ -0,0 +1,40 @@
++iosxe:
++  devices:
++  - name: router
++    configuration:
++      system:
++        hostname: R1
++      interfaces:
++        loopbacks:
++        - id: 0
++          ipv4:
++            address: 1.1.1.1
++            address_mask: 255.255.255.255
++        ethernets:
++        - type: GigabitEthernet
++          id: 0/0
++          description: Link to Switch VLAN 10
++          ipv4:
++            address: 10.0.10.1
++            address_mask: 255.255.255.0
++        - type: GigabitEthernet
++          id: 0/1
++          description: Management via bridge0
++        - type: GigabitEthernet
++          id: 0/2
++          shutdown: true
++        - type: GigabitEthernet
++          id: 0/3
++          shutdown: true
++      routing:
++        ospf_processes:
++        - id: 1
++          router_id: 1.1.1.1
++          passive_interface_default: true
++          networks:
++          - ip: 1.1.1.1
++            wildcard: 0.0.0.0
++            area: 0
++          - ip: 10.0.10.0
++            wildcard: 0.0.0.255
++            area: 0

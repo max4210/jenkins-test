@@ -1,0 +1,33 @@
+! Wireless CLI from wlc
+! Export this manually — not part of the NaC IOS-XE data model
+!
+wireless management interface Vlan20
+!
+wireless country US
+!
+wireless config vwlc-ssc key-size 2048 signature-algo sha256 password 0 C1sco12345
+!
+wlan Corporate 1 Corporate
+ security wpa psk set-key ascii 0 C1sco12345
+ security wpa akm psk
+ no security wpa akm dot1x
+ no shutdown
+!
+wlan Guest-WiFi 2 Guest-WiFi
+ no security wpa
+ no security wpa akm dot1x
+ no security ft
+ no shutdown
+!
+wireless profile policy pp-corporate
+ vlan 100
+ no shutdown
+!
+wireless profile policy pp-guest
+ vlan 200
+ no shutdown
+!
+wireless tag policy pt-default
+ wlan Corporate policy pp-corporate
+ wlan Guest-WiFi policy pp-guest
+!

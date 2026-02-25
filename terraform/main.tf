@@ -20,16 +20,16 @@ provider "cml2" {
 
 resource "cml2_lab" "network_lab" {
   title       = var.lab_title
-  description = "NAC-style lab: router, switch, C9800 WLC with OSPF, bridge0 management"
+  description = "NAC-style lab: router, switch, C9800 WLC with OSPF, bridge1 management"
 }
 
-# --- External Connector (bridge0) ---
+# --- External Connector (bridge1) ---
 
 resource "cml2_node" "ext_connector" {
   lab_id         = cml2_lab.network_lab.id
-  label          = "bridge0"
+  label          = "bridge1"
   nodedefinition = "external_connector"
-  configuration  = "System Bridge"
+  configuration  = "Bridge 1"
   x              = 0
   y              = -250
 }
@@ -89,7 +89,7 @@ resource "cml2_link" "wlc_to_switch" {
   slot_b = 1                          # Switch Gi0/1
 }
 
-# --- Management Links (bridge0 → mgmt-hub → all devices) ---
+# --- Management Links (bridge1 → mgmt-hub → all devices) ---
 
 resource "cml2_link" "ext_to_mgmt_hub" {
   lab_id = cml2_lab.network_lab.id

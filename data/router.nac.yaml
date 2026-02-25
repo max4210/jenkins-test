@@ -11,7 +11,7 @@ router:
       ip: 10.0.10.1
       mask: 255.255.255.0
     - name: GigabitEthernet0/1
-      description: Management via bridge0
+      description: Management via bridge1
       dhcp: true
   ospf:
     process_id: 1

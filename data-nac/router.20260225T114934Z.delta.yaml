@@ -1,0 +1,17 @@
+! Delta for router YAML
+! Compared: router.20260225T113604Z.nac.yaml -> router.20260225T114934Z.nac.yaml
+! Lines added: 4, removed: 0
+!
+--- router.20260225T113604Z.nac.yaml
++++ router.20260225T114934Z.nac.yaml
+@@ -9,6 +9,10 @@
+         - id: 0
+           ipv4:
+             address: 1.1.1.1
++            address_mask: 255.255.255.255
++        - id: 1
++          ipv4:
++            address: 1.1.1.2
+             address_mask: 255.255.255.255
+         ethernets:
+         - type: GigabitEthernet
