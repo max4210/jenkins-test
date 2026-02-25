@@ -1,6 +1,10 @@
 wlc_9800:
   type: wlc_9800
   hostname: WLC1
+  interfaces:
+    - name: GigabitEthernet1
+      ip: 10.0.1.5
+      mask: 255.255.255.0
   management:
     vlan: 20
     ip: 10.0.2.1
