@@ -2,10 +2,28 @@ switch:
   type: switch
   hostname: SW1
   ip_routing: true
+  domain_name: lab.local
+  name_servers:
+    - 8.8.8.8
+    - 8.8.4.4
+  banner_motd: "Authorized access only. All activity is monitored."
+
+  services:
+    timestamps_debug: true
+    timestamps_log: true
+    password_encryption: true
+
   loopback:
     id: 0
     ip: 2.2.2.2
     mask: 255.255.255.255
+
+  spanning_tree:
+    mode: rapid-pvst
+    vlan_priorities:
+      - vlans: "10,20,100,200"
+        priority: 4096
+
   vlans:
     - id: 10
       name: DATA
@@ -15,26 +33,41 @@ switch:
       name: CORPORATE
     - id: 200
       name: GUEST
+
   vlan_interfaces:
     - vlan: 1
+      description: Default VLAN - DHCP mgmt
       dhcp: true
     - vlan: 10
+      description: Data - Router link
       ip: 10.0.10.2
       mask: 255.255.255.0
     - vlan: 20
+      description: WLC Management
       ip: 10.0.20.2
       mask: 255.255.255.0
+      ip_helper_addresses:
+        - 10.0.10.1
     - vlan: 100
+      description: Corporate Wireless
       ip: 10.0.100.1
       mask: 255.255.255.0
+      ip_helper_addresses:
+        - 10.0.10.1
     - vlan: 200
+      description: Guest Wireless
       ip: 10.0.200.1
       mask: 255.255.255.0
+      ip_helper_addresses:
+        - 10.0.10.1
+
   interfaces:
     - name: GigabitEthernet0/0
       description: Link to Router
       mode: access
       vlan: 10
+      portfast: true
+      bpduguard: true
     - name: GigabitEthernet0/1
       description: Trunk to WLC
       mode: trunk
@@ -43,6 +76,53 @@ switch:
       description: Management via bridge1
       mode: access
       vlan: 1
+
+  dhcp_pools:
+    - name: CORPORATE-POOL
+      network: 10.0.100.0
+      mask: 255.255.255.0
+      default_router: 10.0.100.1
+      dns_server: 8.8.8.8
+      domain_name: corp.lab.local
+      lease_days: 1
+      excluded_addresses:
+        - start: 10.0.100.1
+          end: 10.0.100.10
+    - name: GUEST-POOL
+      network: 10.0.200.0
+      mask: 255.255.255.0
+      default_router: 10.0.200.1
+      dns_server: 8.8.8.8
+      domain_name: guest.lab.local
+      lease_days: 0
+      excluded_addresses:
+        - start: 10.0.200.1
+          end: 10.0.200.10
+
+  ntp:
+    timezone: UTC
+    timezone_offset: 0
+    servers:
+      - address: 10.0.10.1
+        prefer: true
+
+  logging:
+    buffered_size: 65536
+    buffered_level: informational
+    console_level: errors
+    trap_level: informational
+    source_interface: Loopback0
+    hosts:
+      - 10.0.10.1
+
+  snmp:
+    location: "Lab - Switch SW1"
+    contact: "admin@lab.local"
+    communities:
+      - name: READONLY
+        access: RO
+    source_interface: Loopback0
+
   ospf:
     process_id: 1
     router_id: 2.2.2.2

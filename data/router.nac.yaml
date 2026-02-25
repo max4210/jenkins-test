@@ -1,10 +1,22 @@
 router:
   type: router
   hostname: R1
+  domain_name: lab.local
+  name_servers:
+    - 8.8.8.8
+    - 8.8.4.4
+  banner_motd: "Authorized access only. All activity is monitored."
+
+  services:
+    timestamps_debug: true
+    timestamps_log: true
+    password_encryption: true
+
   loopback:
     id: 0
     ip: 1.1.1.1
     mask: 255.255.255.255
+
   interfaces:
     - name: GigabitEthernet0/0
       description: Link to Switch VLAN 10
@@ -13,6 +25,35 @@ router:
     - name: GigabitEthernet0/1
       description: Management via bridge1
       dhcp: true
+    - name: GigabitEthernet0/2
+      shutdown: true
+    - name: GigabitEthernet0/3
+      shutdown: true
+
+  ntp:
+    timezone: UTC
+    timezone_offset: 0
+    servers:
+      - address: 10.0.10.2
+        prefer: true
+
+  logging:
+    buffered_size: 65536
+    buffered_level: informational
+    console_level: errors
+    trap_level: informational
+    source_interface: Loopback0
+    hosts:
+      - 10.0.10.2
+
+  snmp:
+    location: "Lab - Router R1"
+    contact: "admin@lab.local"
+    communities:
+      - name: READONLY
+        access: RO
+    source_interface: Loopback0
+
   ospf:
     process_id: 1
     router_id: 1.1.1.1

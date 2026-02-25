@@ -1,17 +1,31 @@
 wlc_9800:
   type: wlc_9800
   hostname: WLC1
+  domain_name: lab.local
+  name_servers:
+    - 8.8.8.8
+    - 8.8.4.4
+  banner_motd: "C9800 WLC - Authorized access only."
+
+  services:
+    timestamps_debug: true
+    timestamps_log: true
+    password_encryption: true
+
   loopback:
     id: 0
     ip: 3.3.3.3
     mask: 255.255.255.255
+
   trunk_interface: GigabitEthernet1
   mgmt_dhcp_interface: GigabitEthernet2
+
   management:
     vlan: 20
     ip: 10.0.20.1
     mask: 255.255.255.0
     gateway: 10.0.20.2
+
   vlans:
     - id: 20
       name: WLC-MGMT
@@ -19,6 +33,37 @@ wlc_9800:
       name: CORPORATE
     - id: 200
       name: GUEST
+
+  static_routes:
+    - prefix: 0.0.0.0
+      mask: 0.0.0.0
+      next_hop: 10.0.20.2
+      name: DEFAULT-TO-SWITCH
+
+  ntp:
+    timezone: UTC
+    timezone_offset: 0
+    servers:
+      - address: 10.0.20.2
+        prefer: true
+
+  logging:
+    buffered_size: 65536
+    buffered_level: informational
+    console_level: errors
+    trap_level: informational
+    source_interface: Loopback0
+    hosts:
+      - 10.0.20.2
+
+  snmp:
+    location: "Lab - WLC WLC1"
+    contact: "admin@lab.local"
+    communities:
+      - name: READONLY
+        access: RO
+    source_interface: Loopback0
+
   wireless:
     country: US
     wlans:
@@ -37,8 +82,11 @@ wlc_9800:
     policy_profiles:
       - name: pp-corporate
         vlan: 100
+        aaa_override: true
+        central_switching: true
       - name: pp-guest
         vlan: 200
+        central_switching: true
     policy_tags:
       - name: pt-default
         mappings:
@@ -46,6 +94,7 @@ wlc_9800:
             policy: pp-corporate
           - wlan: Guest-WiFi
             policy: pp-guest
+
   ospf:
     process_id: 1
     router_id: 3.3.3.3

@@ -7,32 +7,45 @@ device:
   type: str()
   hostname: str(min=1, max=63)
   ip_routing: bool(required=False)
-  loopback: include('loopback', required=False)
+  domain_name: str(required=False)
+  name_servers: list(str(), required=False)
+  banner_motd: str(required=False)
+  services: include('services', required=False)
+  loopbacks: list(include('loopback'), required=False)
+  loopback: include('loopback_single', required=False)
   interfaces: list(include('interface'), required=False)
   vlans: list(include('vlan'), required=False)
   vlan_interfaces: list(include('vlan_interface'), required=False)
   management: include('management', required=False)
   trunk_interface: str(required=False)
   mgmt_dhcp_interface: str(required=False)
+  static_routes: list(include('static_route'), required=False)
+  dhcp_pools: list(include('dhcp_pool'), required=False)
+  ntp: include('ntp', required=False)
+  logging: include('logging_cfg', required=False)
+  snmp: include('snmp', required=False)
+  spanning_tree: include('spanning_tree', required=False)
   wireless: include('wireless', required=False)
   ospf: include('ospf', required=False)
+---
+services:
+  timestamps_debug: bool(required=False)
+  timestamps_log: bool(required=False)
+  password_encryption: bool(required=False)
+  tcp_keepalives_in: bool(required=False)
+  tcp_keepalives_out: bool(required=False)
+---
+loopback_single:
+  id: int(min=0)
+  ip: str()
+  mask: str()
 ---
 loopback:
   id: int(min=0)
   ip: str()
   mask: str()
----
-vlan_interface:
-  vlan: int(min=1, max=4094)
-  ip: str(required=False)
-  mask: str(required=False)
-  dhcp: bool(required=False)
----
-management:
-  vlan: int(required=False)
-  ip: str(required=False)
-  mask: str(required=False)
-  gateway: str(required=False)
+  description: str(required=False)
+  ospf_area: int(required=False)
 ---
 interface:
   name: str(min=1, max=64)
@@ -40,13 +53,106 @@ interface:
   ip: str(required=False)
   mask: str(required=False)
   dhcp: bool(required=False)
+  shutdown: bool(required=False)
   mode: str(required=False)
   vlan: int(required=False)
+  native_vlan: int(required=False)
   allowed_vlans: str(required=False)
+  portfast: bool(required=False)
+  bpduguard: bool(required=False)
+  ip_helper_addresses: list(str(), required=False)
+  speed: str(required=False)
+  duplex: str(required=False)
+  channel_group: include('channel_group', required=False)
+---
+channel_group:
+  id: int(min=1)
+  mode: str()
 ---
 vlan:
   id: int(min=1, max=4094)
   name: str(min=1, max=128, required=False)
+---
+vlan_interface:
+  vlan: int(min=1, max=4094)
+  description: str(required=False)
+  ip: str(required=False)
+  mask: str(required=False)
+  dhcp: bool(required=False)
+  shutdown: bool(required=False)
+  ip_helper_addresses: list(str(), required=False)
+---
+management:
+  vlan: int(required=False)
+  ip: str(required=False)
+  mask: str(required=False)
+  gateway: str(required=False)
+---
+static_route:
+  prefix: str()
+  mask: str()
+  next_hop: str(required=False)
+  interface: str(required=False)
+  name: str(required=False)
+  ad: int(required=False)
+---
+dhcp_pool:
+  name: str()
+  network: str()
+  mask: str()
+  default_router: str(required=False)
+  dns_server: str(required=False)
+  domain_name: str(required=False)
+  lease_days: int(required=False)
+  excluded_addresses: list(include('dhcp_excluded'), required=False)
+---
+dhcp_excluded:
+  start: str()
+  end: str(required=False)
+---
+ntp:
+  servers: list(include('ntp_server'), required=False)
+  timezone: str(required=False)
+  timezone_offset: int(required=False)
+---
+ntp_server:
+  address: str()
+  prefer: bool(required=False)
+  key: int(required=False)
+---
+logging_cfg:
+  buffered_size: int(required=False)
+  buffered_level: str(required=False)
+  console_level: str(required=False)
+  monitor_level: str(required=False)
+  hosts: list(str(), required=False)
+  source_interface: str(required=False)
+  trap_level: str(required=False)
+---
+snmp:
+  communities: list(include('snmp_community'), required=False)
+  location: str(required=False)
+  contact: str(required=False)
+  trap_hosts: list(include('snmp_trap_host'), required=False)
+  source_interface: str(required=False)
+---
+snmp_community:
+  name: str()
+  access: str()
+  acl: str(required=False)
+---
+snmp_trap_host:
+  address: str()
+  community: str()
+  version: str(required=False)
+---
+spanning_tree:
+  mode: str(required=False)
+  vlan_priorities: list(include('stp_vlan_priority'), required=False)
+---
+stp_vlan_priority:
+  vlans: str()
+  priority: int()
 ---
 ospf:
   process_id: int(min=1)
@@ -54,6 +160,8 @@ ospf:
   passive_default: bool(required=False)
   active_interfaces: list(str(), required=False)
   networks: list(include('ospf_network'))
+  default_information_originate: bool(required=False)
+  redistribute: list(str(), required=False)
 ---
 ospf_network:
   network: str()
@@ -79,6 +187,8 @@ wlan_security:
 policy_profile:
   name: str()
   vlan: int()
+  aaa_override: bool(required=False)
+  central_switching: bool(required=False)
 ---
 policy_tag:
   name: str()
