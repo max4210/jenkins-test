@@ -46,11 +46,66 @@ pipeline {
             }
         }
 
-        stage('Validate') {
+        stage('Validate: Schema') {
             steps {
+                echo '=========================================='
+                echo '  STEP 1/3 — Schema Validation (Yamale)'
+                echo '=========================================='
+                echo 'Checks every data/*.nac.yaml against .schema.yaml:'
+                echo '  - Required keys present (hostname, type, ...)'
+                echo '  - Value types correct (str, int, bool, list)'
+                echo '  - Value ranges enforced (VLAN 1-4094, hostname max 63 chars)'
+                echo '  - Nested structures match definitions (ospf, wireless, ...)'
+                echo ''
                 sh '''
-                    nac-validate -s .schema.yaml -r .rules data/
+                    echo "Data files:"
+                    ls -1 data/*.nac.yaml
+                    echo ""
+                    nac-validate -s .schema.yaml data/
                 '''
+            }
+        }
+
+        stage('Validate: Rules') {
+            steps {
+                echo '=========================================='
+                echo '  STEP 2/3 — Semantic Rules (per-file)'
+                echo '=========================================='
+                echo 'Runs Python rules from .rules/ against each data file:'
+                echo '  101  Unique VLAN IDs within a device'
+                echo '  102  All IPs are valid IPv4 format'
+                echo '  103  Subnet masks are contiguous'
+                echo '  104  OSPF router-ID matches loopback IP'
+                echo '  105  Unique WLAN IDs and SSIDs'
+                echo '  106  Policy tag mappings reference existing WLANs/profiles'
+                echo '  107  Referenced VLANs exist in the vlans list'
+                echo '  108  WLAN security type is a recognized value'
+                echo '  109  Hostname is RFC 1123 compliant'
+                echo '  110  Routed interfaces have IP or DHCP'
+                echo ''
+                sh '''
+                    echo "Rules:"
+                    ls -1 .rules/*.py
+                    echo ""
+                    nac-validate -r .rules data/
+                '''
+            }
+        }
+
+        stage('Validate: Cross-file') {
+            steps {
+                echo '=========================================='
+                echo '  STEP 3/3 — Cross-file Consistency'
+                echo '=========================================='
+                echo 'Loads all data files together and checks:'
+                echo '  - OSPF router-IDs unique across devices'
+                echo '  - Loopback IPs unique across devices'
+                echo '  - No duplicate IPs anywhere'
+                echo '  - WLC management subnet matches switch SVI'
+                echo '  - WLC VLANs exist on switch and are allowed on trunk'
+                echo '  - OSPF network statements cover loopback addresses'
+                echo ''
+                sh 'python3 scripts/cross_validate.py data/'
             }
         }
 
@@ -69,10 +124,14 @@ pipeline {
             steps {
                 dir('terraform') {
                     sh '''
-                        terraform state rm cml2_lifecycle.network_lab cml2_link.router_to_switch cml2_link.wlc_to_switch cml2_node.router cml2_node.switch cml2_node.wlc cml2_lab.network_lab 2>/dev/null || true
+                        echo "Removing all tracked resources from state..."
+                        terraform state list 2>/dev/null | while read -r resource; do
+                            echo "  removing: $resource"
+                            terraform state rm "$resource" 2>/dev/null || true
+                        done
                     '''
                 }
-                echo 'Terraform state cleared - next plan will create resources from scratch.'
+                echo 'Terraform state cleared — next plan will create resources from scratch.'
             }
         }
 
@@ -95,10 +154,10 @@ pipeline {
 
     post {
         success {
-            echo 'Pipeline completed - CML lab deployed successfully.'
+            echo 'Pipeline completed — CML lab deployed successfully.'
         }
         failure {
-            echo 'Pipeline failed - check logs. Lab may persist for debugging.'
+            echo 'Pipeline FAILED — check stage logs above. Lab may persist for debugging.'
         }
     }
 }
