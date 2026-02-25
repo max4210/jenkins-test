@@ -2,8 +2,10 @@ wlc_9800:
   type: wlc_9800
   hostname: WLC1
   management:
-    ip: 10.0.3.1
+    vlan: 20
+    ip: 10.0.2.1
     mask: 255.255.255.0
+    gateway: 10.0.2.2
   wireless:
     ssids:
       - name: Corporate

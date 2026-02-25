@@ -18,8 +18,10 @@ vlan_interface:
   mask: str()
 ---
 management:
+  vlan: int(required=False)
   ip: str()
   mask: str()
+  gateway: str(required=False)
 ---
 interface:
   name: str(min=1, max=64)
