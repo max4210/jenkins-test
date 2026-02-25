@@ -29,7 +29,7 @@ resource "cml2_node" "ext_connector" {
   lab_id         = cml2_lab.network_lab.id
   label          = "bridge0"
   nodedefinition = "external_connector"
-  configuration  = "bridge0"
+  configuration  = "System Bridge"
   x              = 0
   y              = -250
 }
