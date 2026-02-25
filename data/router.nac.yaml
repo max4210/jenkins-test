@@ -1,13 +1,28 @@
 router:
   type: router
   hostname: R1
+  loopback:
+    id: 0
+    ip: 1.1.1.1
+    mask: 255.255.255.255
   interfaces:
     - name: GigabitEthernet0/0
-      ip: 10.0.1.1
+      description: Link to Switch VLAN 10
+      ip: 10.0.10.1
       mask: 255.255.255.0
     - name: GigabitEthernet0/1
-      ip: 10.0.12.1
-      mask: 255.255.255.0
-    - name: Loopback0
-      ip: 1.1.1.1
-      mask: 255.255.255.255
+      description: Management via bridge0
+      dhcp: true
+  ospf:
+    process_id: 1
+    router_id: 1.1.1.1
+    passive_default: true
+    active_interfaces:
+      - GigabitEthernet0/0
+    networks:
+      - network: 10.0.10.0
+        wildcard: 0.0.0.255
+        area: 0
+      - network: 1.1.1.1
+        wildcard: 0.0.0.0
+        area: 0

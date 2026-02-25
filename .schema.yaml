@@ -6,38 +6,84 @@ wlc_9800: include('device', required=False)
 device:
   type: str()
   hostname: str(min=1, max=63)
+  ip_routing: bool(required=False)
+  loopback: include('loopback', required=False)
   interfaces: list(include('interface'), required=False)
   vlans: list(include('vlan'), required=False)
   vlan_interfaces: list(include('vlan_interface'), required=False)
   management: include('management', required=False)
+  trunk_interface: str(required=False)
+  mgmt_dhcp_interface: str(required=False)
   wireless: include('wireless', required=False)
+  ospf: include('ospf', required=False)
+---
+loopback:
+  id: int(min=0)
+  ip: str()
+  mask: str()
 ---
 vlan_interface:
   vlan: int(min=1, max=4094)
-  ip: str()
-  mask: str()
+  ip: str(required=False)
+  mask: str(required=False)
+  dhcp: bool(required=False)
 ---
 management:
   vlan: int(required=False)
-  ip: str()
-  mask: str()
+  ip: str(required=False)
+  mask: str(required=False)
   gateway: str(required=False)
 ---
 interface:
   name: str(min=1, max=64)
+  description: str(required=False)
   ip: str(required=False)
   mask: str(required=False)
+  dhcp: bool(required=False)
   mode: str(required=False)
   vlan: int(required=False)
+  allowed_vlans: str(required=False)
 ---
 vlan:
   id: int(min=1, max=4094)
   name: str(min=1, max=128, required=False)
 ---
-wireless:
-  ssids: list(include('ssid'), required=False)
+ospf:
+  process_id: int(min=1)
+  router_id: str()
+  passive_default: bool(required=False)
+  active_interfaces: list(str(), required=False)
+  networks: list(include('ospf_network'))
 ---
-ssid:
-  name: str(min=1, max=32)
+ospf_network:
+  network: str()
+  wildcard: str()
+  area: int(min=0)
+---
+wireless:
+  country: str(required=False)
+  wlans: list(include('wlan'), required=False)
+  policy_profiles: list(include('policy_profile'), required=False)
+  policy_tags: list(include('policy_tag'), required=False)
+---
+wlan:
+  profile_name: str()
+  ssid: str()
+  wlan_id: int(min=1)
   vlan: int(required=False)
-  security: str(required=False)
+  security: include('wlan_security')
+---
+wlan_security:
+  type: str()
+---
+policy_profile:
+  name: str()
+  vlan: int()
+---
+policy_tag:
+  name: str()
+  mappings: list(include('tag_mapping'))
+---
+tag_mapping:
+  wlan: str()
+  policy: str()

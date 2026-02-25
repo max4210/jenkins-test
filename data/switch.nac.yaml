@@ -1,22 +1,68 @@
 switch:
   type: switch
   hostname: SW1
+  ip_routing: true
+  loopback:
+    id: 0
+    ip: 2.2.2.2
+    mask: 255.255.255.255
   vlans:
     - id: 10
       name: DATA
     - id: 20
-      name: VOICE
+      name: WLC-MGMT
+    - id: 100
+      name: CORPORATE
+    - id: 200
+      name: GUEST
   vlan_interfaces:
+    - vlan: 1
+      dhcp: true
     - vlan: 10
-      ip: 10.0.1.2
+      ip: 10.0.10.2
       mask: 255.255.255.0
     - vlan: 20
-      ip: 10.0.2.2
+      ip: 10.0.20.2
+      mask: 255.255.255.0
+    - vlan: 100
+      ip: 10.0.100.1
+      mask: 255.255.255.0
+    - vlan: 200
+      ip: 10.0.200.1
       mask: 255.255.255.0
   interfaces:
     - name: GigabitEthernet0/0
+      description: Link to Router
       mode: access
       vlan: 10
     - name: GigabitEthernet0/1
+      description: Trunk to WLC
+      mode: trunk
+      allowed_vlans: "20,100,200"
+    - name: GigabitEthernet0/2
+      description: Management via bridge0
       mode: access
-      vlan: 20
+      vlan: 1
+  ospf:
+    process_id: 1
+    router_id: 2.2.2.2
+    passive_default: true
+    active_interfaces:
+      - Vlan10
+      - Vlan20
+    networks:
+      - network: 10.0.10.0
+        wildcard: 0.0.0.255
+        area: 0
+      - network: 10.0.20.0
+        wildcard: 0.0.0.255
+        area: 0
+      - network: 10.0.100.0
+        wildcard: 0.0.0.255
+        area: 0
+      - network: 10.0.200.0
+        wildcard: 0.0.0.255
+        area: 0
+      - network: 2.2.2.2
+        wildcard: 0.0.0.0
+        area: 0

@@ -20,7 +20,26 @@ provider "cml2" {
 
 resource "cml2_lab" "network_lab" {
   title       = var.lab_title
-  description = "NAC-style lab: router, switch, WLC - config from data/*.nac.yaml"
+  description = "NAC-style lab: router, switch, C9800 WLC with OSPF, bridge0 management"
+}
+
+# --- External Connector (bridge0) ---
+
+resource "cml2_node" "ext_connector" {
+  lab_id         = cml2_lab.network_lab.id
+  label          = "bridge0"
+  nodedefinition = "external_connector"
+  configuration  = "bridge0"
+  x              = 0
+  y              = -250
+}
+
+resource "cml2_node" "mgmt_switch" {
+  lab_id         = cml2_lab.network_lab.id
+  label          = "mgmt-hub"
+  nodedefinition = "unmanaged_switch"
+  x              = 0
+  y              = -150
 }
 
 # --- Nodes (config from locals in config_inject.tf) ---
@@ -39,7 +58,7 @@ resource "cml2_node" "switch" {
   label          = "switch"
   nodedefinition = "iosvl2"
   x              = 0
-  y              = 150
+  y              = 100
   configuration  = local.switch_config
 }
 
@@ -52,22 +71,56 @@ resource "cml2_node" "wlc" {
   configuration  = local.wlc_config
 }
 
-# --- Links ---
+# --- Data-plane Links ---
 
 resource "cml2_link" "router_to_switch" {
   lab_id = cml2_lab.network_lab.id
   node_a = cml2_node.router.id
-  slot_a = 0
+  slot_a = 0                          # Router Gi0/0
   node_b = cml2_node.switch.id
-  slot_b = 0
+  slot_b = 0                          # Switch Gi0/0
 }
 
 resource "cml2_link" "wlc_to_switch" {
   lab_id = cml2_lab.network_lab.id
   node_a = cml2_node.wlc.id
-  slot_a = 0
+  slot_a = 0                          # WLC Gi1 (trunk)
   node_b = cml2_node.switch.id
+  slot_b = 1                          # Switch Gi0/1
+}
+
+# --- Management Links (bridge0 → mgmt-hub → all devices) ---
+
+resource "cml2_link" "ext_to_mgmt_hub" {
+  lab_id = cml2_lab.network_lab.id
+  node_a = cml2_node.ext_connector.id
+  slot_a = 0
+  node_b = cml2_node.mgmt_switch.id
+  slot_b = 0
+}
+
+resource "cml2_link" "router_to_mgmt_hub" {
+  lab_id = cml2_lab.network_lab.id
+  node_a = cml2_node.router.id
+  slot_a = 1                          # Router Gi0/1
+  node_b = cml2_node.mgmt_switch.id
   slot_b = 1
+}
+
+resource "cml2_link" "switch_to_mgmt_hub" {
+  lab_id = cml2_lab.network_lab.id
+  node_a = cml2_node.switch.id
+  slot_a = 2                          # Switch Gi0/2
+  node_b = cml2_node.mgmt_switch.id
+  slot_b = 2
+}
+
+resource "cml2_link" "wlc_to_mgmt_hub" {
+  lab_id = cml2_lab.network_lab.id
+  node_a = cml2_node.wlc.id
+  slot_a = 1                          # WLC Gi2 (routed, DHCP)
+  node_b = cml2_node.mgmt_switch.id
+  slot_b = 3
 }
 
 # --- Lifecycle ---
@@ -80,7 +133,13 @@ resource "cml2_lifecycle" "network_lab" {
     cml2_node.router,
     cml2_node.switch,
     cml2_node.wlc,
+    cml2_node.ext_connector,
+    cml2_node.mgmt_switch,
     cml2_link.router_to_switch,
     cml2_link.wlc_to_switch,
+    cml2_link.ext_to_mgmt_hub,
+    cml2_link.router_to_mgmt_hub,
+    cml2_link.switch_to_mgmt_hub,
+    cml2_link.wlc_to_mgmt_hub,
   ]
 }

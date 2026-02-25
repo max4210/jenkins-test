@@ -1,20 +1,61 @@
 wlc_9800:
   type: wlc_9800
   hostname: WLC1
-  interfaces:
-    - name: GigabitEthernet1
-      ip: 10.0.1.5
-      mask: 255.255.255.0
+  loopback:
+    id: 0
+    ip: 3.3.3.3
+    mask: 255.255.255.255
+  trunk_interface: GigabitEthernet1
+  mgmt_dhcp_interface: GigabitEthernet2
   management:
     vlan: 20
-    ip: 10.0.2.1
+    ip: 10.0.20.1
     mask: 255.255.255.0
-    gateway: 10.0.2.2
+    gateway: 10.0.20.2
+  vlans:
+    - id: 20
+      name: WLC-MGMT
+    - id: 100
+      name: CORPORATE
+    - id: 200
+      name: GUEST
   wireless:
-    ssids:
-      - name: Corporate
-        vlan: 10
-        security: wpa2-psk
-      - name: Guest
-        vlan: 20
-        security: open
+    country: US
+    wlans:
+      - profile_name: Corporate
+        ssid: Corporate
+        wlan_id: 1
+        vlan: 100
+        security:
+          type: wpa2-personal
+      - profile_name: Guest-WiFi
+        ssid: Guest-WiFi
+        wlan_id: 2
+        vlan: 200
+        security:
+          type: open
+    policy_profiles:
+      - name: pp-corporate
+        vlan: 100
+      - name: pp-guest
+        vlan: 200
+    policy_tags:
+      - name: pt-default
+        mappings:
+          - wlan: Corporate
+            policy: pp-corporate
+          - wlan: Guest-WiFi
+            policy: pp-guest
+  ospf:
+    process_id: 1
+    router_id: 3.3.3.3
+    passive_default: true
+    active_interfaces:
+      - Vlan20
+    networks:
+      - network: 10.0.20.0
+        wildcard: 0.0.0.255
+        area: 0
+      - network: 3.3.3.3
+        wildcard: 0.0.0.0
+        area: 0
