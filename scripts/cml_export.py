@@ -281,6 +281,7 @@ def _parse_interface_name(full_name):
 def _parse_interface_block(children):
     """Parse child lines of an interface block into a raw dict."""
     info = {}
+    helpers = []
     for line in children:
         if line.startswith("ip address dhcp"):
             info["dhcp"] = True
@@ -289,6 +290,8 @@ def _parse_interface_block(children):
             if len(parts) >= 4:
                 info["ipv4_address"] = parts[2]
                 info["ipv4_mask"] = parts[3]
+        elif line.startswith("ip helper-address "):
+            helpers.append(line.split()[-1])
         elif line.startswith("description "):
             info["description"] = line[len("description "):]
         elif line == "shutdown":
@@ -308,6 +311,21 @@ def _parse_interface_block(children):
             pass
         elif line.startswith("switchport trunk native vlan "):
             info["sw_trunk_native"] = int(line.split()[-1])
+        elif line == "spanning-tree portfast":
+            info["portfast"] = True
+        elif line == "spanning-tree bpduguard enable":
+            info["bpduguard"] = True
+        elif line.startswith("speed "):
+            info["speed"] = line.split()[-1]
+        elif line.startswith("duplex "):
+            info["duplex"] = line.split()[-1]
+        elif line.startswith("channel-group "):
+            m = re.match(r"channel-group (\d+) mode (\S+)", line)
+            if m:
+                info["channel_group_id"] = int(m.group(1))
+                info["channel_group_mode"] = m.group(2)
+    if helpers:
+        info["ip_helpers"] = helpers
     return info
 
 
@@ -320,11 +338,20 @@ def _build_nac_ethernet(iface_type, iface_id, raw):
         eth["description"] = raw["description"]
     if raw.get("shutdown") is True:
         eth["shutdown"] = True
+    if raw.get("speed"):
+        eth["speed"] = raw["speed"]
+    if raw.get("duplex"):
+        eth["duplex"] = raw["duplex"]
 
-    if raw.get("ipv4_address") and not raw.get("sw_mode"):
+    if raw.get("dhcp") and not raw.get("sw_mode"):
+        eth["dhcp"] = True
+    elif raw.get("ipv4_address") and not raw.get("sw_mode"):
         eth["ipv4"] = OrderedDict()
         eth["ipv4"]["address"] = raw["ipv4_address"]
         eth["ipv4"]["address_mask"] = raw["ipv4_mask"]
+
+    if raw.get("ip_helpers"):
+        eth["ip_helper_addresses"] = raw["ip_helpers"]
 
     if raw.get("sw_mode"):
         sw = OrderedDict()
@@ -338,6 +365,15 @@ def _build_nac_ethernet(iface_type, iface_id, raw):
         if raw.get("sw_trunk_native"):
             sw["trunk_native_vlan_id"] = raw["sw_trunk_native"]
         eth["switchport"] = sw
+
+    if raw.get("portfast"):
+        eth["portfast"] = True
+    if raw.get("bpduguard"):
+        eth["bpduguard"] = True
+    if raw.get("channel_group_id"):
+        eth["channel_group"] = OrderedDict()
+        eth["channel_group"]["id"] = raw["channel_group_id"]
+        eth["channel_group"]["mode"] = raw.get("channel_group_mode", "active")
 
     return eth
 
@@ -364,11 +400,13 @@ def _build_nac_vlan_svi(vlan_id, raw):
     if raw.get("shutdown") is True:
         svi["shutdown"] = True
     if raw.get("dhcp"):
-        pass
+        svi["dhcp"] = True
     elif raw.get("ipv4_address"):
         svi["ipv4"] = OrderedDict()
         svi["ipv4"]["address"] = raw["ipv4_address"]
         svi["ipv4"]["address_mask"] = raw["ipv4_mask"]
+    if raw.get("ip_helpers"):
+        svi["ip_helper_addresses"] = raw["ip_helpers"]
     return svi
 
 
@@ -401,6 +439,8 @@ def _parse_ospf_block(cmd, children):
     passive_ifs = []
     active_ifs = []
     passive_default = False
+    redistributes = []
+    default_info_originate = False
 
     for line in children:
         if line.startswith("router-id "):
@@ -423,11 +463,19 @@ def _parse_ospf_block(cmd, children):
                 net["wildcard"] = parts[2]
                 net["area"] = _ospf_area_value(parts[4])
                 networks.append(net)
+        elif line.startswith("default-information originate"):
+            default_info_originate = True
+        elif line.startswith("redistribute "):
+            redistributes.append(line.split()[1])
 
     if passive_default:
         ospf["passive_interface_default"] = True
     if networks:
         ospf["networks"] = networks
+    if default_info_originate:
+        ospf["default_information_originate"] = True
+    if redistributes:
+        ospf["redistribute"] = redistributes
 
     return ospf
 
@@ -459,6 +507,288 @@ def _parse_vlan_block(cmd, children):
 
 
 # ═══════════════════════════════════════════════════════════════════
+#  Global / Services Parsers
+# ═══════════════════════════════════════════════════════════════════
+
+
+def _parse_global_config(blocks):
+    """Extract global config items from top-level commands."""
+    result = OrderedDict()
+    services = OrderedDict()
+    name_servers = []
+    static_routes = []
+    ntp_servers = []
+    logging_hosts = []
+    snmp_communities = []
+    snmp_trap_hosts = []
+    stp_vlan_priorities = []
+    dhcp_pools = []
+    dhcp_excluded = []
+
+    for cmd, children in blocks:
+        # --- Domain / DNS ---
+        if cmd.startswith("ip domain-name ") or cmd.startswith("ip domain name "):
+            result["domain_name"] = cmd.split()[-1]
+        elif cmd.startswith("ip name-server "):
+            for ns in cmd.split()[2:]:
+                if ns not in name_servers:
+                    name_servers.append(ns)
+
+        # --- Banner ---
+        elif cmd.startswith("banner motd "):
+            raw = cmd[len("banner motd "):]
+            delim = raw[0] if raw else "^"
+            result["banner_motd"] = raw.strip(delim).strip()
+
+        # --- Services ---
+        elif cmd == "service timestamps debug datetime msec":
+            services["timestamps_debug"] = True
+        elif cmd == "service timestamps log datetime msec":
+            services["timestamps_log"] = True
+        elif cmd == "service password-encryption":
+            services["password_encryption"] = True
+
+        # --- Static routes ---
+        elif cmd.startswith("ip route "):
+            sr = _parse_static_route(cmd)
+            if sr:
+                static_routes.append(sr)
+
+        # --- NTP ---
+        elif cmd.startswith("clock timezone "):
+            parts = cmd.split()
+            result.setdefault("ntp", OrderedDict())
+            result["ntp"]["timezone"] = parts[2]
+            if len(parts) > 3:
+                try:
+                    result["ntp"]["timezone_offset"] = int(parts[3])
+                except ValueError:
+                    pass
+        elif cmd.startswith("ntp server "):
+            srv = _parse_ntp_server(cmd)
+            if srv:
+                ntp_servers.append(srv)
+
+        # --- Logging ---
+        elif cmd.startswith("logging buffered "):
+            parts = cmd.split()
+            result.setdefault("logging", OrderedDict())
+            if len(parts) >= 3:
+                try:
+                    result["logging"]["buffered_size"] = int(parts[2])
+                except ValueError:
+                    pass
+            if len(parts) >= 4:
+                result["logging"]["buffered_level"] = parts[3]
+        elif cmd.startswith("logging console "):
+            result.setdefault("logging", OrderedDict())
+            result["logging"]["console_level"] = cmd.split()[-1]
+        elif cmd.startswith("logging monitor "):
+            result.setdefault("logging", OrderedDict())
+            result["logging"]["monitor_level"] = cmd.split()[-1]
+        elif cmd.startswith("logging trap "):
+            result.setdefault("logging", OrderedDict())
+            result["logging"]["trap_level"] = cmd.split()[-1]
+        elif cmd.startswith("logging source-interface "):
+            result.setdefault("logging", OrderedDict())
+            result["logging"]["source_interface"] = cmd.split()[-1]
+        elif cmd.startswith("logging host "):
+            logging_hosts.append(cmd.split()[-1])
+
+        # --- SNMP ---
+        elif cmd.startswith("snmp-server community "):
+            parts = cmd.split()
+            if len(parts) >= 4:
+                comm = OrderedDict()
+                comm["name"] = parts[2]
+                comm["access"] = parts[3]
+                if len(parts) >= 5:
+                    comm["acl"] = parts[4]
+                snmp_communities.append(comm)
+        elif cmd.startswith("snmp-server location "):
+            result.setdefault("snmp", OrderedDict())
+            result["snmp"]["location"] = cmd[len("snmp-server location "):]
+        elif cmd.startswith("snmp-server contact "):
+            result.setdefault("snmp", OrderedDict())
+            result["snmp"]["contact"] = cmd[len("snmp-server contact "):]
+        elif cmd.startswith("snmp-server source-interface "):
+            result.setdefault("snmp", OrderedDict())
+            result["snmp"]["source_interface"] = cmd.split()[-1]
+        elif cmd.startswith("snmp-server host "):
+            th = _parse_snmp_trap_host(cmd)
+            if th:
+                snmp_trap_hosts.append(th)
+
+        # --- Spanning Tree ---
+        elif cmd.startswith("spanning-tree mode "):
+            result.setdefault("spanning_tree", OrderedDict())
+            result["spanning_tree"]["mode"] = cmd.split()[-1]
+        elif cmd.startswith("spanning-tree vlan "):
+            sp = _parse_stp_vlan_priority(cmd)
+            if sp:
+                stp_vlan_priorities.append(sp)
+
+        # --- DHCP excluded ---
+        elif cmd.startswith("ip dhcp excluded-address "):
+            ex = _parse_dhcp_excluded(cmd)
+            if ex:
+                dhcp_excluded.append(ex)
+
+        # --- DHCP pools ---
+        elif cmd.startswith("ip dhcp pool "):
+            pool = _parse_dhcp_pool(cmd, children)
+            if pool:
+                dhcp_pools.append(pool)
+
+    if services:
+        result["services"] = services
+    if name_servers:
+        result["name_servers"] = name_servers
+    if static_routes:
+        result["static_routes"] = static_routes
+    if ntp_servers:
+        result.setdefault("ntp", OrderedDict())
+        result["ntp"]["servers"] = ntp_servers
+    if logging_hosts:
+        result.setdefault("logging", OrderedDict())
+        result["logging"]["hosts"] = logging_hosts
+    if snmp_communities:
+        result.setdefault("snmp", OrderedDict())
+        result["snmp"]["communities"] = snmp_communities
+    if snmp_trap_hosts:
+        result.setdefault("snmp", OrderedDict())
+        result["snmp"]["trap_hosts"] = snmp_trap_hosts
+    if stp_vlan_priorities:
+        result.setdefault("spanning_tree", OrderedDict())
+        result["spanning_tree"]["vlan_priorities"] = stp_vlan_priorities
+    if dhcp_pools:
+        for pool in dhcp_pools:
+            pool_excluded = [e for e in dhcp_excluded
+                             if _ip_in_subnet(e["start"], pool["network"], pool["mask"])]
+            if pool_excluded:
+                pool["excluded_addresses"] = pool_excluded
+        result["dhcp_pools"] = dhcp_pools
+
+    return result
+
+
+def _parse_static_route(cmd):
+    """Parse 'ip route <prefix> <mask> <next_hop> [name <name>] [<ad>]'."""
+    parts = cmd.split()
+    if len(parts) < 5:
+        return None
+    sr = OrderedDict()
+    sr["prefix"] = parts[2]
+    sr["mask"] = parts[3]
+    rest = parts[4:]
+    if rest and not rest[0].startswith("name"):
+        sr["next_hop"] = rest[0]
+        rest = rest[1:]
+    if "name" in rest:
+        idx = rest.index("name")
+        if idx + 1 < len(rest):
+            sr["name"] = rest[idx + 1]
+    return sr
+
+
+def _parse_ntp_server(cmd):
+    """Parse 'ntp server <addr> [prefer] [key <n>]'."""
+    parts = cmd.split()
+    if len(parts) < 3:
+        return None
+    srv = OrderedDict()
+    srv["address"] = parts[2]
+    if "prefer" in parts:
+        srv["prefer"] = True
+    if "key" in parts:
+        idx = parts.index("key")
+        if idx + 1 < len(parts):
+            try:
+                srv["key"] = int(parts[idx + 1])
+            except ValueError:
+                pass
+    return srv
+
+
+def _parse_snmp_trap_host(cmd):
+    """Parse 'snmp-server host <addr> [version <ver>] <community>'."""
+    parts = cmd.split()
+    if len(parts) < 4:
+        return None
+    th = OrderedDict()
+    th["address"] = parts[2]
+    if "version" in parts:
+        idx = parts.index("version")
+        if idx + 1 < len(parts):
+            th["version"] = parts[idx + 1]
+            th["community"] = parts[idx + 2] if idx + 2 < len(parts) else ""
+    else:
+        th["community"] = parts[3]
+    return th
+
+
+def _parse_stp_vlan_priority(cmd):
+    """Parse 'spanning-tree vlan <vlans> priority <pri>'."""
+    m = re.match(r"spanning-tree vlan (\S+) priority (\d+)", cmd)
+    if m:
+        return OrderedDict([("vlans", m.group(1)), ("priority", int(m.group(2)))])
+    return None
+
+
+def _parse_dhcp_excluded(cmd):
+    """Parse 'ip dhcp excluded-address <start> [<end>]'."""
+    parts = cmd.split()
+    if len(parts) < 4:
+        return None
+    ex = OrderedDict()
+    ex["start"] = parts[3]
+    if len(parts) >= 5:
+        ex["end"] = parts[4]
+    return ex
+
+
+def _parse_dhcp_pool(cmd, children):
+    """Parse 'ip dhcp pool <name>' block."""
+    pool_name = cmd[len("ip dhcp pool "):]
+    pool = OrderedDict()
+    pool["name"] = pool_name
+    for line in children:
+        if line.startswith("network "):
+            parts = line.split()
+            if len(parts) >= 3:
+                pool["network"] = parts[1]
+                pool["mask"] = parts[2]
+        elif line.startswith("default-router "):
+            pool["default_router"] = line.split()[-1]
+        elif line.startswith("dns-server "):
+            pool["dns_server"] = line.split()[-1]
+        elif line.startswith("domain-name "):
+            pool["domain_name"] = line.split()[-1]
+        elif line.startswith("lease "):
+            parts = line.split()
+            if len(parts) >= 2:
+                try:
+                    pool["lease_days"] = int(parts[1])
+                except ValueError:
+                    pass
+    return pool if "network" in pool else None
+
+
+def _ip_in_subnet(ip_str, network_str, mask_str):
+    """Quick check if an IP falls in the given network/mask (best-effort)."""
+    try:
+        ip_parts = [int(p) for p in ip_str.split(".")]
+        net_parts = [int(p) for p in network_str.split(".")]
+        mask_parts = [int(p) for p in mask_str.split(".")]
+        for i in range(4):
+            if (ip_parts[i] & mask_parts[i]) != (net_parts[i] & mask_parts[i]):
+                return False
+        return True
+    except (ValueError, IndexError):
+        return False
+
+
+# ═══════════════════════════════════════════════════════════════════
 #  C9800 Wireless Parser (raw CLI extraction)
 # ═══════════════════════════════════════════════════════════════════
 
@@ -483,59 +813,9 @@ def _parse_wireless_blocks(blocks):
 # ═══════════════════════════════════════════════════════════════════
 
 
-def parse_iosxe_router(config_text, label):
-    """Parse an IOS-XE router config into NaC device dict."""
-    blocks = split_cli_blocks(config_text)
-    device = OrderedDict()
-    device["name"] = label
-
-    config = OrderedDict()
-    system = OrderedDict()
-    loopbacks = []
-    ethernets = []
-    ospf_processes = []
-
-    for cmd, children in blocks:
-        if cmd.startswith("hostname "):
-            system["hostname"] = cmd.split(None, 1)[1]
-
-        elif cmd.startswith("interface Loopback"):
-            _, lo_id = _parse_interface_name(cmd.split(None, 1)[1])
-            raw = _parse_interface_block(children)
-            loopbacks.append(_build_nac_loopback(lo_id, raw))
-
-        elif cmd.startswith("interface "):
-            iface_name = cmd.split(None, 1)[1]
-            itype, iid = _parse_interface_name(iface_name)
-            if itype.lower().startswith("loopback"):
-                continue
-            raw = _parse_interface_block(children)
-            ethernets.append(_build_nac_ethernet(itype, iid, raw))
-
-        elif cmd.startswith("router ospf "):
-            ospf = _parse_ospf_block(cmd, children)
-            if ospf:
-                ospf_processes.append(ospf)
-
-    if system:
-        config["system"] = system
-    interfaces = OrderedDict()
-    if loopbacks:
-        interfaces["loopbacks"] = loopbacks
-    if ethernets:
-        interfaces["ethernets"] = ethernets
-    if interfaces:
-        config["interfaces"] = interfaces
-    if ospf_processes:
-        config["routing"] = {"ospf_processes": ospf_processes}
-
-    device["configuration"] = config
-    return device
-
-
-def parse_iosxe_switch(config_text, label):
-    """Parse an IOSvL2 / IOS-XE switch config into NaC device dict."""
-    blocks = split_cli_blocks(config_text)
+def _assemble_device(label, blocks, *, system_extras=None, include_vlans=False,
+                     include_wireless=False):
+    """Shared assembly logic for all device types."""
     device = OrderedDict()
     device["name"] = label
 
@@ -555,7 +835,7 @@ def parse_iosxe_switch(config_text, label):
         elif cmd == "ip routing":
             has_ip_routing = True
 
-        elif re.match(r"^vlan \d+$", cmd):
+        elif include_vlans and re.match(r"^vlan \d+$", cmd):
             v = _parse_vlan_block(cmd, children)
             if v:
                 vlans.append(v)
@@ -583,10 +863,23 @@ def parse_iosxe_switch(config_text, label):
             if ospf:
                 ospf_processes.append(ospf)
 
+    # --- Global config extraction ---
+    global_cfg = _parse_global_config(blocks)
+
     if has_ip_routing:
         system["ip_routing"] = True
+    if system_extras:
+        system.update(system_extras)
     if system:
         config["system"] = system
+
+    # Merge global fields into config
+    for key in ("domain_name", "name_servers", "banner_motd", "services",
+                "static_routes", "ntp", "logging", "snmp", "spanning_tree",
+                "dhcp_pools"):
+        if key in global_cfg:
+            config[key] = global_cfg[key]
+
     if vlans:
         config["vlan"] = {"vlans": vlans}
 
@@ -603,79 +896,32 @@ def parse_iosxe_switch(config_text, label):
         config["routing"] = {"ospf_processes": ospf_processes}
 
     device["configuration"] = config
+
+    if include_wireless:
+        wireless_cli = _parse_wireless_blocks(blocks)
+        if wireless_cli:
+            device["_wireless_cli"] = wireless_cli
+
     return device
+
+
+def parse_iosxe_router(config_text, label):
+    """Parse an IOS-XE router config into NaC device dict."""
+    blocks = split_cli_blocks(config_text)
+    return _assemble_device(label, blocks, include_vlans=False)
+
+
+def parse_iosxe_switch(config_text, label):
+    """Parse an IOSvL2 / IOS-XE switch config into NaC device dict."""
+    blocks = split_cli_blocks(config_text)
+    return _assemble_device(label, blocks, include_vlans=True)
 
 
 def parse_iosxe_wlc(config_text, label):
     """Parse a C9800-CL config into NaC device dict + wireless raw CLI."""
     blocks = split_cli_blocks(config_text)
-    device = OrderedDict()
-    device["name"] = label
-
-    config = OrderedDict()
-    system = OrderedDict()
-    vlans = []
-    loopbacks = []
-    svis = []
-    ethernets = []
-    ospf_processes = []
-
-    for cmd, children in blocks:
-        if cmd.startswith("hostname "):
-            system["hostname"] = cmd.split(None, 1)[1]
-
-        elif re.match(r"^vlan \d+$", cmd):
-            v = _parse_vlan_block(cmd, children)
-            if v:
-                vlans.append(v)
-
-        elif cmd.startswith("interface Loopback"):
-            _, lo_id = _parse_interface_name(cmd.split(None, 1)[1])
-            raw = _parse_interface_block(children)
-            loopbacks.append(_build_nac_loopback(lo_id, raw))
-
-        elif re.match(r"^interface Vlan\d+$", cmd):
-            vlan_id = cmd.split("Vlan")[1]
-            raw = _parse_interface_block(children)
-            svis.append(_build_nac_vlan_svi(vlan_id, raw))
-
-        elif cmd.startswith("interface "):
-            iface_name = cmd.split(None, 1)[1]
-            if iface_name.startswith("Vlan") or iface_name.startswith("Loopback"):
-                continue
-            itype, iid = _parse_interface_name(iface_name)
-            raw = _parse_interface_block(children)
-            ethernets.append(_build_nac_ethernet(itype, iid, raw))
-
-        elif cmd.startswith("router ospf "):
-            ospf = _parse_ospf_block(cmd, children)
-            if ospf:
-                ospf_processes.append(ospf)
-
-    if system:
-        config["system"] = system
-    if vlans:
-        config["vlan"] = {"vlans": vlans}
-
-    interfaces = OrderedDict()
-    if loopbacks:
-        interfaces["loopbacks"] = loopbacks
-    if svis:
-        interfaces["vlans"] = svis
-    if ethernets:
-        interfaces["ethernets"] = ethernets
-    if interfaces:
-        config["interfaces"] = interfaces
-    if ospf_processes:
-        config["routing"] = {"ospf_processes": ospf_processes}
-
-    device["configuration"] = config
-
-    wireless_cli = _parse_wireless_blocks(blocks)
-    if wireless_cli:
-        device["_wireless_cli"] = wireless_cli
-
-    return device
+    return _assemble_device(label, blocks, include_vlans=True,
+                            include_wireless=True)
 
 
 # ═══════════════════════════════════════════════════════════════════

@@ -17,6 +17,10 @@ class Rule:
                 name = iface.get("name", "")
                 if name.lower().startswith("loopback"):
                     continue
+                if iface.get("shutdown"):
+                    continue
+                if iface.get("mode") in ("access", "trunk"):
+                    continue
                 has_ip = bool(iface.get("ip") and iface.get("mask"))
                 has_dhcp = bool(iface.get("dhcp"))
                 if not has_ip and not has_dhcp:
