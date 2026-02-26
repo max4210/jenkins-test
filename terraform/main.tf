@@ -29,7 +29,7 @@ resource "cml2_node" "ext_connector" {
   lab_id         = cml2_lab.network_lab.id
   label          = "bridge1"
   nodedefinition = "external_connector"
-  configuration  = "Bridge 1"
+  configuration  = "Bridge 1: (bridge1)"
   x              = 0
   y              = -250
 }
@@ -47,7 +47,7 @@ resource "cml2_node" "mgmt_switch" {
 resource "cml2_node" "router" {
   lab_id         = cml2_lab.network_lab.id
   label          = "router"
-  nodedefinition = "iosv"
+  nodedefinition = "cat8000v"
   x              = -200
   y              = 0
   configuration  = local.router_config
